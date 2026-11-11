@@ -1,0 +1,1403 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>FX Options Advisor</title>
+<style>
+/* Layout concept: dark cyber-fintech glass dashboard — one floating console with a
+   3-zone header, a 2x3 strategy grid of glazed tiles, and a right diagnostic column
+   (payoff / probability / analysis), all over a dot-matrix "world map" + glow waves. */
+:root{
+  --bg0:#030712; --bg1:#070d1e;
+  --glass:rgba(255,255,255,.045); --glass-2:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.16); --border-strong:rgba(255,255,255,.28);
+  --fg:#ffffff; --fg-dim:#94a3b8; --fg-faint:#56657e;
+  --green:#4ade80; --green-glow:#39ff14;
+  --cyan:#38bdf8; --cyan-glow:#00e5ff;
+  --orange:#fb923c; --red:#ff5d7a;
+  --font-display:'Space Grotesk',system-ui,sans-serif;
+  --font-ui:'Rajdhani',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;}
+body{
+  background:linear-gradient(180deg,var(--bg1) 0%,var(--bg0) 55%);
+  color:var(--fg); font-family:var(--font-ui); min-height:100%; position:relative; overflow-x:hidden;
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:-2;
+  background-image:radial-gradient(1px 1px at center, rgba(255,255,255,.22) 1px, transparent 1px);
+  background-size:26px 26px;
+  mask-image:radial-gradient(ellipse 95% 75% at 50% 15%, black 35%, transparent 85%);
+  -webkit-mask-image:radial-gradient(ellipse 95% 75% at 50% 15%, black 35%, transparent 85%);
+}
+.bg-waves{position:fixed; inset:0; z-index:-1; opacity:.45; filter:blur(1px); mix-blend-mode:screen; pointer-events:none;}
+.bg-waves svg{width:100%; height:100%;}
+
+.wrap{
+  max-width:1400px; margin:0 auto;
+  padding:18px max(16px, env(safe-area-inset-left,0px)) 48px max(16px, env(safe-area-inset-right,0px));
+}
+h1,h2,h3,h4{font-family:var(--font-display); font-weight:700; text-wrap:balance; margin:0;}
+.mono{font-family:var(--font-mono);}
+.num{font-variant-numeric:tabular-nums;}
+a{color:var(--cyan);}
+
+/* ---------- Glass base ---------- */
+.panel{
+  position:relative; overflow:hidden;
+  background:var(--glass); border:1px solid var(--border); border-radius:26px;
+  padding:24px; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  box-shadow:0 20px 60px rgba(0,0,0,.45);
+}
+.panel::before{
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:linear-gradient(135deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 32%, transparent 55%);
+}
+.panel > *{ position:relative; z-index:1; }
+.panel + .panel{margin-top:16px;}
+
+/* ---------- Header: 3 zones ---------- */
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;
+  margin-bottom:18px; padding:18px 26px; border-radius:26px;
+}
+.hdr-left, .hdr-right{display:flex; flex-direction:column; gap:7px;}
+.hdr-center{display:flex; align-items:center; gap:12px;}
+.hdr-label{font-size:10.5px; letter-spacing:2.2px; color:var(--fg-dim); font-weight:600; text-transform:uppercase;}
+.capsule-select{
+  position:relative; background:rgba(255,255,255,.05); border:1px solid var(--border);
+  border-radius:999px; min-width:150px;
+}
+.capsule-select::after{
+  content:""; position:absolute; right:15px; top:50%; width:7px; height:7px;
+  border-right:2px solid var(--fg-dim); border-bottom:2px solid var(--fg-dim);
+  transform:translateY(-70%) rotate(45deg); pointer-events:none;
+}
+.capsule-select select{
+  appearance:none; background:transparent; border:none; outline:none; width:100%; display:block;
+  padding:8px 34px 8px 16px; box-sizing:border-box;
+  color:var(--fg); font-family:var(--font-ui); font-weight:700; font-size:15px; letter-spacing:.4px; cursor:pointer;
+}
+.capsule-select select option{background:#0b1322; color:var(--fg);}
+.logo-mark{
+  width:46px; height:46px; border-radius:14px; flex:none;
+  background:linear-gradient(135deg, rgba(255,255,255,.26), rgba(255,255,255,.04));
+  border:1px solid var(--border-strong); display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:700; font-size:17px; color:var(--fg);
+  box-shadow:0 0 22px rgba(0,229,255,.3), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.logo-word{display:flex; flex-direction:column; line-height:1.15;}
+.logo-word b{font-family:var(--font-display); font-size:19px; font-weight:700; letter-spacing:3px;}
+.logo-word span{font-family:var(--font-ui); font-size:10px; letter-spacing:3px; color:var(--fg-dim); font-weight:600;}
+.param-grid{
+  display:grid; grid-template-columns:auto auto auto; column-gap:16px; row-gap:7px; align-items:center;
+  grid-template-areas:"ml mv rl" "pl pv rv";
+}
+.pg-ml{grid-area:ml;} .pg-mv{grid-area:mv;} .pg-rl{grid-area:rl;}
+.pg-pl{grid-area:pl;} .pg-pv{grid-area:pv;} .pg-rv{grid-area:rv;}
+.param-label{font-size:10.5px; letter-spacing:1.6px; color:var(--fg-dim); font-weight:600; white-space:nowrap;}
+.param-value{
+  font-family:var(--font-mono); font-size:12.5px; font-weight:600; white-space:nowrap;
+  background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:999px; padding:5px 14px;
+}
+.param-value.accent{color:var(--cyan); border-color:rgba(56,189,248,.4);}
+.param-value.neg{color:var(--red); border-color:rgba(255,93,122,.4);}
+
+/* ---------- Stepper ---------- */
+.stepper{display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap;}
+.step-btn{
+  flex:1; min-width:150px; text-align:left; cursor:pointer; user-select:none;
+  background:var(--glass); border:1px solid var(--border); border-radius:16px;
+  padding:9px 16px; transition:border-color .15s, background .15s;
+}
+.step-btn .n{font-family:var(--font-mono); font-size:11px; color:var(--fg-faint);}
+.step-btn .t{font-size:14px; font-weight:600; color:var(--fg-dim); font-family:var(--font-ui);}
+.step-btn.active{border-color:var(--cyan); background:rgba(56,189,248,.08);}
+.step-btn.active .t{color:var(--fg);}
+.step-btn.done .n{color:var(--green);}
+.step-btn:not(.enabled){opacity:.4; cursor:not-allowed;}
+
+/* ---------- Form fields ---------- */
+.section-title{font-size:21px; margin-bottom:4px;}
+.section-sub{color:var(--fg-dim); font-size:13.5px; margin-bottom:18px; max-width:65ch; font-family:var(--font-ui);}
+.hint{font-size:11.5px; color:var(--fg-faint); margin-top:6px; font-family:var(--font-ui);}
+.vol-auto{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:16px;}
+label.field{display:block; margin-bottom:16px;}
+label.field .flabel{display:block; font-size:12.5px; color:var(--fg-dim); margin-bottom:6px; letter-spacing:.3px;}
+.tc-strip{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px; padding:14px 20px; border-radius:18px; background:rgba(255,255,255,.035); border:1px solid var(--border);}
+.tc-item{display:flex; flex-direction:column; gap:3px; min-width:92px;}
+.tc-item.main{min-width:118px;}
+.tc-label{font-size:10.5px; letter-spacing:1.4px; color:var(--fg-dim); font-weight:600; text-transform:uppercase; white-space:nowrap; font-family:var(--font-ui);}
+.tc-value{font-family:var(--font-mono); font-size:17px; font-weight:700; color:var(--fg);}
+.tc-value.accent{color:var(--cyan); font-size:21px; text-shadow:0 0 14px rgba(56,189,248,.4);}
+.tc-sep{width:1px; height:36px; background:var(--border); flex:none;}
+.tc-delta{font-size:10.5px; font-family:var(--font-mono); margin-top:1px; white-space:nowrap;}
+.tc-delta.pos{color:var(--green);}
+.tc-delta.neg{color:var(--red);}
+.input, select, input[type=text], input[type=number], input[type=date]{
+  width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:14px;
+  color:var(--fg); font-family:var(--font-mono); font-size:14.5px; padding:10px 12px;
+  outline:none; transition:border-color .15s;
+}
+.input:focus, select:focus, input:focus{border-color:var(--cyan);}
+select option{background:#0b1322; color:var(--fg);}
+select option:disabled{color:var(--cyan); font-weight:700; letter-spacing:1px;}
+.row{display:flex; gap:16px; flex-wrap:wrap;}
+.row > *{flex:1; min-width:220px;}
+
+.btn{
+  font-family:var(--font-ui); font-weight:700; font-size:14px; letter-spacing:.3px;
+  border:none; border-radius:999px; padding:12px 24px; cursor:pointer;
+  background:linear-gradient(135deg,var(--cyan-glow),#1aa8c9); color:#02141c;
+  box-shadow:0 6px 18px rgba(0,229,255,.28); transition:transform .1s, box-shadow .15s;
+}
+.btn:hover{transform:translateY(-1px); box-shadow:0 8px 22px rgba(0,229,255,.4);}
+.btn:active{transform:translateY(0);}
+.btn.ghost{background:transparent; border:1px solid var(--border-strong); color:var(--fg); box-shadow:none;}
+.btn.green{background:linear-gradient(135deg,var(--green-glow),#1f9a5e); color:#021a0d; box-shadow:0 6px 18px rgba(74,222,128,.25);}
+.btn:disabled{opacity:.4; cursor:not-allowed; transform:none; box-shadow:none;}
+.btn-row{display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;}
+
+.alert{border-radius:14px; padding:10px 14px; font-size:13.5px; margin-top:10px; border:1px solid rgba(255,93,122,.4); background:rgba(255,93,122,.08); color:#ffb3c0;}
+.alert.info{border-color:rgba(56,189,248,.4); background:rgba(56,189,248,.08); color:#bfe9fc;}
+
+/* ---------- Step 3: 2x3 tile grid + diagnostics column ---------- */
+.stage{display:grid; grid-template-columns:1fr 380px; gap:18px; align-items:start;}
+@media (max-width:920px){.stage{grid-template-columns:1fr;}}
+.gallery-head{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+.gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:20px;}
+.tile{min-width:0;}
+.card{
+  position:relative; overflow:hidden; aspect-ratio:1/1; border-radius:22px; cursor:pointer;
+  background:var(--glass); border:1px solid var(--border);
+  transition:border-color .15s, transform .12s;
+}
+.card::before{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+  background-size:14px 14px;
+}
+.card::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.02) 32%, transparent 55%);
+}
+.card canvas{position:relative; z-index:1; width:100%; height:100%; display:block;}
+.card{transition:border-color .15s, transform .12s, background .2s, box-shadow .2s;}
+.tile:hover .card{
+  border-color:var(--border-strong); transform:translateY(-2px);
+  background:rgba(255,255,255,.1);
+  box-shadow:0 14px 34px rgba(0,0,0,.4), 0 0 28px rgba(56,189,248,.18), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.tile-tooltip{
+  position:fixed; z-index:80; width:260px; max-width:calc(100vw - 24px); padding:14px 16px; border-radius:16px;
+  background:rgba(8,12,24,.97); border:1px solid var(--border-strong); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  box-shadow:0 20px 44px rgba(0,0,0,.55); font-family:var(--font-ui); font-size:12.5px; line-height:1.5; color:var(--fg-dim);
+  opacity:0; pointer-events:none; transform:translateY(4px); transition:opacity .15s, transform .15s;
+}
+.tile-tooltip.show{opacity:1; transform:translateY(0);}
+.tile-tooltip .tt-tag{display:block; font-size:10.5px; color:var(--cyan); margin-bottom:5px; font-family:var(--font-mono); letter-spacing:.4px; text-transform:uppercase;}
+.tile-tooltip .tt-title{font-family:var(--font-display); font-weight:700; font-size:14px; color:var(--fg); margin-bottom:6px;}
+.tile-tooltip .tt-when{margin-top:8px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.15); color:var(--fg-dim);}
+.tile-tooltip .tt-when b{color:var(--green); font-family:var(--font-ui); font-weight:700;}
+.tile.selected .card{border-color:var(--cyan-glow); box-shadow:0 0 0 1px rgba(0,229,255,.45) inset, 0 0 26px rgba(0,229,255,.25);}
+.tile-label{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px;}
+.label-capsule{
+  background:var(--glass); border:1px solid var(--border); border-radius:999px; padding:7px 16px;
+  font-family:var(--font-ui); font-weight:600; font-size:12.5px; letter-spacing:.3px; text-align:center;
+}
+.tile.selected .label-capsule{border-color:var(--cyan-glow); color:var(--cyan-glow); box-shadow:0 0 14px rgba(0,229,255,.3);}
+.badge{font-family:var(--font-mono); font-size:10px; font-weight:700; border-radius:999px; padding:2px 8px; border:1px solid var(--border-strong); flex:none;}
+.badge.l1{color:var(--green); border-color:rgba(74,222,128,.4);}
+.badge.l2{color:var(--orange); border-color:rgba(251,146,60,.4);}
+.badge.l3{color:var(--red); border-color:rgba(255,93,122,.4);}
+.nivel-legend{display:flex; gap:16px; flex-wrap:wrap; margin:2px 0 14px;}
+.nl-item{display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--fg-dim); font-family:var(--font-ui);}
+.nl-item b{color:var(--fg); font-family:var(--font-mono); font-weight:700;}
+.nl-dot{width:9px; height:9px; border-radius:50%; flex:none;}
+.nl-dot.l1{background:var(--green); box-shadow:0 0 8px rgba(74,222,128,.55);}
+.nl-dot.l2{background:var(--orange); box-shadow:0 0 8px rgba(251,146,60,.55);}
+.nl-dot.l3{background:var(--red); box-shadow:0 0 8px rgba(255,93,122,.55);}
+
+.preview{position:sticky; top:12px;}
+.diag-section{padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,.09);}
+.diag-section:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
+.diag-head{display:flex; justify-content:space-between; align-items:baseline;}
+.diag-head.right{flex-direction:row-reverse;}
+.diag-tag{font-family:var(--font-mono); font-size:10.5px; color:var(--fg-dim); border:1px solid var(--border); border-radius:999px; padding:2px 10px;}
+.diag-title{font-family:var(--font-ui); font-size:13px; letter-spacing:2.2px; color:var(--fg-dim); text-transform:uppercase; font-weight:700;}
+.diag-sub{font-family:var(--font-ui); font-size:11px; letter-spacing:1.6px; color:var(--fg-faint);}
+.dashed-divider{border-top:1px dashed rgba(255,255,255,.2); margin:8px 0 10px;}
+.preview canvas.big{width:100%; height:150px; display:block;}
+.pname{font-size:17px; font-weight:800; margin:10px 0 2px; font-family:var(--font-display);}
+.pvista{font-size:12.5px; color:var(--cyan); margin-bottom:4px;}
+.metrics-mono{display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; font-family:var(--font-mono); font-size:11.5px; color:var(--fg-dim); margin:10px 0;}
+.metrics-mono b{color:var(--fg); font-weight:600;}
+.analisis-txt{font-size:12.5px; color:var(--fg-dim); line-height:1.55; margin-top:4px; font-family:var(--font-ui);}
+
+/* ---------- Step 4 ---------- */
+.exec-list{padding-left:20px; margin:0 0 14px; font-size:14px; line-height:1.7; font-family:var(--font-ui);}
+.exec-list li{margin-bottom:4px;}
+table.exec{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:10px;}
+table.exec th, table.exec td{padding:9px 10px; text-align:right; border-bottom:1px solid var(--border); font-family:var(--font-mono); white-space:nowrap;}
+table.exec th{color:var(--fg-dim); font-weight:600; font-family:var(--font-ui); text-align:right;}
+table.exec th:first-child, table.exec td:first-child{text-align:left;}
+.tbl-wrap{overflow-x:auto;}
+.prima-line{font-size:14.5px; margin:6px 0 18px; font-family:var(--font-ui);}
+.prima-line b{font-family:var(--font-mono);}
+.risk-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; margin-bottom:22px;}
+.risk-tile{background:rgba(255,255,255,.035); border:1px solid var(--border); border-radius:16px; padding:12px 14px;}
+.risk-tile .rl{font-size:11px; color:var(--fg-dim); letter-spacing:.3px;}
+.risk-tile .rv{font-family:var(--font-mono); font-size:17px; font-weight:700; margin-top:4px;}
+.risk-tile.pos .rv{color:var(--green);}
+.risk-tile.neg .rv{color:var(--red);}
+.charts3{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin:10px 0 18px;}
+.chart-card{background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:18px; padding:14px; position:relative; overflow:hidden;}
+.chart-card .ct{font-size:12px; color:var(--fg-dim); margin-bottom:8px; letter-spacing:.2px; font-family:var(--font-ui);}
+.chart-card canvas{width:100%; height:220px; display:block; position:relative; z-index:1;}
+.rationale-box{background:rgba(255,255,255,.035); border:1px solid var(--border); border-radius:18px; padding:16px 20px; margin-bottom:4px;}
+.rationale-box p{margin:0 0 10px; font-size:13.5px; line-height:1.65; color:var(--fg-dim); font-family:var(--font-ui);}
+.rationale-box p:last-child{margin-bottom:0;}
+.rationale-box b{color:var(--fg); font-weight:700;}
+.legal{font-size:11.5px; color:var(--fg-faint); line-height:1.6; margin-top:6px; border-top:1px solid var(--border); padding-top:12px; font-family:var(--font-ui);}
+.ficha{margin-top:18px; border-top:1px solid var(--border); padding-top:16px;}
+.ficha-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; font-size:13px;}
+.ficha-grid .fl{color:var(--cyan); font-size:11px; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; font-family:var(--font-ui);}
+.ficha-grid .fv{color:var(--fg-dim); line-height:1.5; font-family:var(--font-ui);}
+
+[hidden]{display:none!important;}
+@media (max-width:560px){
+  .logo-word span{display:none;}
+  table.exec{font-size:11.5px;}
+  .param-grid{column-gap:10px;}
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<div class="bg-waves" aria-hidden="true">
+  <svg viewBox="0 0 1400 500" preserveAspectRatio="none">
+    <path d="M-50,380 C 250,320 350,440 650,380 S 1050,300 1450,360" fill="none" stroke="#00e5ff" stroke-width="2" opacity=".5"/>
+    <path d="M-50,430 C 300,500 450,360 750,430 S 1150,480 1450,410" fill="none" stroke="#39ff14" stroke-width="2" opacity=".35"/>
+    <path d="M-50,120 C 300,60 500,160 800,100 S 1150,40 1450,110" fill="none" stroke="#fb923c" stroke-width="1.5" opacity=".25"/>
+  </svg>
+</div>
+
+<div class="wrap">
+  <div class="header panel">
+    <div class="hdr-left">
+      <div class="hdr-label">Divisas</div>
+      <div class="capsule-select"><select id="selPar"></select></div>
+    </div>
+    <div class="hdr-center">
+      <div class="logo-mark">FX</div>
+      <div class="logo-word"><b>ADVISOR</b><span>DERIVATIVES DESK</span></div>
+    </div>
+    <div class="hdr-right">
+      <div class="param-grid">
+        <div class="param-label pg-ml">Monto</div><div class="param-value pg-mv" id="pillMonto">—</div>
+        <div class="param-label pg-rl">Riesgo</div>
+        <div class="param-label pg-pl">Plazo</div><div class="param-value pg-pv" id="pillPlazo">—</div>
+        <div class="param-value accent pg-rv" id="pillRiesgo">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stepper" id="stepper"></div>
+
+  <div id="step1" hidden>
+    <div class="panel">
+      <h2 class="section-title">1 · Confirma la divisa</h2>
+      <p class="section-sub">El precio se cotiza como cuántas unidades de la divisa cotizada cuesta 1 unidad de la divisa base. Cambia el par desde el selector del encabezado en cualquier momento.</p>
+      <div class="alert info" id="infoPar"></div>
+      <div class="btn-row"><button class="btn" id="btnToStep2">Continuar ▶</button></div>
+    </div>
+  </div>
+
+  <div id="step2" hidden>
+    <div class="panel">
+      <h2 class="section-title">2 · Datos de tu operación</h2>
+      <p class="section-sub">Captura el monto a cubrir, el vencimiento deseado y tu perfil de riesgo.</p>
+      <div class="tc-strip" id="tcStrip">
+        <div class="tc-item main">
+          <div class="tc-label">T.C. actual</div>
+          <div class="tc-value accent" id="tcActual">—</div>
+        </div>
+        <div class="tc-sep"></div>
+        <div class="tc-item">
+          <div class="tc-label">Prom. 3 meses</div>
+          <div class="tc-value" id="tcM3">—</div>
+          <div class="tc-delta" id="tcM3d"></div>
+        </div>
+        <div class="tc-item">
+          <div class="tc-label">Prom. 6 meses</div>
+          <div class="tc-value" id="tcM6">—</div>
+          <div class="tc-delta" id="tcM6d"></div>
+        </div>
+        <div class="tc-item">
+          <div class="tc-label">Prom. 1 año</div>
+          <div class="tc-value" id="tcY1">—</div>
+          <div class="tc-delta" id="tcY1d"></div>
+        </div>
+      </div>
+      <div class="hint" id="tcHint" style="margin-top:-10px;margin-bottom:16px;"></div>
+      <div class="row">
+        <label class="field"><span class="flabel">Monto (unidades de divisa base)</span>
+          <input class="input" type="number" id="inMonto" value="100000" min="1" step="1000"></label>
+        <label class="field"><span class="flabel">Fecha strike (vence)</span>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input class="input" type="date" id="inFecha" style="flex:1; min-width:0;">
+            <span class="param-value accent" id="diasPreview" style="white-space:nowrap;">— días</span>
+          </div></label>
+        <label class="field"><span class="flabel">Perfil de inversionista</span>
+          <select id="inPerfil"><option value="Conservador">Conservador</option><option value="Moderado" selected>Moderado</option><option value="Agresivo">Agresivo</option></select></label>
+      </div>
+      <h3 style="font-size:14px;color:var(--fg-dim);margin:14px 0 8px;letter-spacing:.5px;font-family:var(--font-ui);">PARÁMETROS AVANZADOS</h3>
+      <div class="vol-auto">
+        <div>
+          <span class="flabel">Volatilidad anual histórica (calculada automáticamente)</span>
+          <div class="param-value accent" id="volPreview" style="display:inline-block;font-size:14px;padding:8px 16px;margin-top:2px;">—</div>
+          <div class="hint" id="volHint"></div>
+        </div>
+      </div>
+      <div class="row">
+        <label class="field"><span class="flabel">Confianza VaR / ES</span>
+          <select id="inConf"><option value="0.95" selected>95%</option><option value="0.99">99%</option></select></label>
+        <label class="field"><span class="flabel">Tipo de cambio objetivo (opcional)</span>
+          <select id="inObjetivo"></select></label>
+        <label class="field"><span class="flabel">Tamaño de contrato (unidades)</span>
+          <input class="input" type="number" id="inTam" value="100000" min="1" step="1000"></label>
+      </div>
+      <div id="alertStep2"></div>
+      <div class="btn-row">
+        <button class="btn ghost" id="btnBack1">◀ Volver</button>
+        <button class="btn" id="btnBuscar">Ver estrategias para mi perfil ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="step3" hidden>
+    <div class="panel">
+      <div class="gallery-head">
+        <div>
+          <h2 class="section-title">3 · Estrategias disponibles para tu perfil</h2>
+          <p class="section-sub" id="resumenCtx" style="margin-bottom:4px;"></p>
+        </div>
+        <button class="btn ghost" id="btnBack2">◀ Volver</button>
+      </div>
+      <div class="nivel-legend">
+        <span class="nl-item"><span class="nl-dot l1"></span><b>N1</b> = riesgo bajo (Conservador)</span>
+        <span class="nl-item"><span class="nl-dot l2"></span><b>N2</b> = riesgo medio (Moderado)</span>
+        <span class="nl-item"><span class="nl-dot l3"></span><b>N3</b> = riesgo alto (Agresivo)</span>
+      </div>
+      <div class="stage">
+        <div><div class="gallery" id="gallery"></div></div>
+        <div class="preview panel" id="previewPanel">
+          <div class="diag-section payoff-section">
+            <div class="diag-head">
+              <span class="diag-tag" id="pvLegTag">—</span>
+              <span class="diag-title">Payoff</span>
+            </div>
+            <div class="dashed-divider"></div>
+            <canvas class="big" id="cvPreviewPayoff"></canvas>
+            <div class="pname" id="pvName">Selecciona una estrategia</div>
+            <div class="pvista" id="pvVista"></div>
+          </div>
+          <div class="diag-section var-section">
+            <div class="diag-head right">
+              <span class="diag-title">Probabilidad</span>
+              <span class="diag-sub">(VaR)</span>
+            </div>
+            <canvas class="big" id="cvPreviewVar" style="height:110px"></canvas>
+          </div>
+          <div class="diag-section analysis-section">
+            <div class="diag-title">Análisis</div>
+            <div class="metrics-mono" id="pvMetrics"></div>
+            <p class="analisis-txt" id="pvDesc"></p>
+            <div class="btn-row"><button class="btn green" id="btnCalcular" disabled>Calcular desglose completo ▶</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="step4" hidden>
+    <div class="panel">
+      <div class="gallery-head">
+        <h2 class="section-title" id="resTitle">4 · Desglose de tu operación</h2>
+        <button class="btn ghost" id="btnBack3">◀ Volver a estrategias</button>
+      </div>
+
+      <h3 style="font-size:15px;margin-bottom:8px;font-family:var(--font-display);">📋 Qué debes hacer</h3>
+      <ol class="exec-list" id="ordenesList"></ol>
+      <div class="tbl-wrap"><table class="exec" id="execTable"></table></div>
+      <p class="prima-line" id="primaNetaTxt"></p>
+
+      <h3 style="font-size:15px;margin:18px 0 10px;font-family:var(--font-display);">📊 Tabla de riesgo</h3>
+      <div class="risk-grid" id="riskGrid"></div>
+
+      <div class="charts3">
+        <div class="chart-card"><div class="ct">P&amp;L al vencimiento (neto de primas)</div><canvas id="cvPnl"></canvas></div>
+        <div class="chart-card"><div class="ct">Tipo de cambio simulado al vencimiento</div><canvas id="cvHistSt"></canvas></div>
+      </div>
+
+      <h3 style="font-size:15px;margin:18px 0 10px;font-family:var(--font-display);">🧭 Racional de la operación</h3>
+      <div class="rationale-box" id="racionalBox"></div>
+
+      <div class="ficha" id="fichaBox">
+        <h3 style="font-size:15px;margin-bottom:10px;font-family:var(--font-display);">📘 Ficha de la estrategia</h3>
+        <div class="ficha-grid" id="fichaGrid"></div>
+      </div>
+
+      <p class="legal">⚠️ Proyecto académico. Supuestos: valuación Garman-Kohlhagen, volatilidad constante, simulación con deriva cero, opciones europeas, primas sin costo de financiamiento ni spreads bid-ask, tasas de interés fijas y aproximadas. Esta herramienta no constituye asesoría financiera.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ================= 1. DATOS EDITABLES ================= */
+const PARES = {
+  "EUR/USD": {base:"EUR", quote:"USD", ticker:"EURUSD=X", s0:1.15, v0:0.08},
+  "GBP/USD": {base:"GBP", quote:"USD", ticker:"GBPUSD=X", s0:1.34, v0:0.08},
+  "USD/MXN": {base:"USD", quote:"MXN", ticker:"USDMXN=X", s0:18.60, v0:0.13},
+  "USD/JPY": {base:"USD", quote:"JPY", ticker:"USDJPY=X", s0:156.0, v0:0.10},
+  "USD/CAD": {base:"USD", quote:"CAD", ticker:"USDCAD=X", s0:1.38, v0:0.06},
+  "AUD/USD": {base:"AUD", quote:"USD", ticker:"AUDUSD=X", s0:0.69, v0:0.10},
+  "USD/CHF": {base:"USD", quote:"CHF", ticker:"USDCHF=X", s0:0.81, v0:0.07},
+  "EUR/MXN": {base:"EUR", quote:"MXN", ticker:"EURMXN=X", s0:21.40, v0:0.14},
+};
+const TASAS = {USD:0.0375, EUR:0.0200, GBP:0.0375, MXN:0.0700, JPY:0.0075, CAD:0.0225, AUD:0.0360, CHF:0.0000};
+const NIVEL_PERFIL = {Conservador:1, Moderado:2, Agresivo:3};
+
+/* ================= 2. CATÁLOGO DE ESTRATEGIAS ================= */
+const CAT = [
+ {id:"protective_put", nombre:"Protective Put", nivel:1, categoria:"Cobertura", vista:"Cobertura / alcista",
+  legs:[["spot",1,null],["put",1,0.98]],
+  desc:"Tienes (o necesitas) la divisa base y compras un PUT para fijar un piso. Pérdida limitada, ganancia ilimitada. Cuesta la prima.",
+  ficha:{cuando_se_usa:"Posees la divisa base y quieres protegerte de una caída sin renunciar a la subida.", beneficio:"Ilimitado por encima del piso, menos la prima pagada.", perdida:"Limitada a la diferencia entre spot y strike del put, más la prima.", deterioro_tiempo:"Adverso para la parte de opción (pierde valor con el tiempo).", sinteticos:"Spot largo + Put largo ≡ Call largo sintético."}},
+ {id:"protective_call", nombre:"Protective Call", nivel:1, categoria:"Cobertura", vista:"Cobertura / bajista",
+  legs:[["spot",-1,null],["call",1,1.02]],
+  desc:"Estás corto en la divisa base y compras un CALL para fijar un techo. Pérdida limitada.",
+  ficha:{cuando_se_usa:"Debes la divisa base (pasivo) y quieres protegerte de un alza.", beneficio:"Ganancia si la divisa baja, menos la prima pagada.", perdida:"Limitada a la diferencia entre strike del call y spot, más la prima.", deterioro_tiempo:"Adverso para la parte de opción.", sinteticos:"Spot corto + Call largo ≡ Put largo sintético."}},
+ {id:"collar", nombre:"Collar", nivel:1, categoria:"Cobertura", vista:"Cobertura de bajo costo",
+  legs:[["spot",1,null],["put",1,0.97],["call",-1,1.03]],
+  desc:"Compras un PUT (piso) y vendes un CALL (techo). La prima del call financia el put: costo cercano a cero, pero renuncias a ganancias grandes.",
+  ficha:{cuando_se_usa:"Posees la divisa y aceptas limitar tu alza a cambio de protección casi sin costo.", beneficio:"Hasta el strike del call vendido.", perdida:"Limitada hasta el strike del put comprado.", deterioro_tiempo:"Prácticamente neutro: las dos primas se compensan.", sinteticos:"Spot largo + Put largo + Call corto ≡ Bull call spread sintético."}},
+ {id:"covered_call", nombre:"Covered Call", nivel:1, categoria:"Cobertura", vista:"Lateral / ligeramente alcista",
+  legs:[["spot",1,null],["call",-1,1.03]],
+  desc:"Tienes la divisa y vendes un CALL fuera del dinero para cobrar prima. Generas ingreso, pero limitas la ganancia al alza.",
+  ficha:{cuando_se_usa:"Posees la divisa y esperas un movimiento lateral o alcista moderado.", beneficio:"Hasta el strike del call, más la prima cobrada.", perdida:"La de tener la divisa, amortiguada por la prima cobrada.", deterioro_tiempo:"Favorable (la opción vendida pierde valor a tu favor).", sinteticos:"Spot largo + Call corto ≡ Put corto sintético."}},
+ {id:"bull_call_spread", nombre:"Bull Call Spread", nivel:2, categoria:"Direccional", vista:"Alcista moderada",
+  legs:[["call",1,1.00],["call",-1,1.04]],
+  desc:"Compras un CALL y vendes otro más alto. Costo menor que un call solo; ganancia y pérdida limitadas.",
+  ficha:{cuando_se_usa:"Esperas un alza moderada y quieres reducir el costo frente a un call simple.", beneficio:"Diferencia entre strikes menos el costo neto pagado.", perdida:"El costo neto (débito) pagado.", deterioro_tiempo:"Depende de si el spot está por debajo o por encima del strike central.", sinteticos:"Call largo (A) + Call corto (B)."}},
+ {id:"bear_put_spread", nombre:"Bear Put Spread", nivel:2, categoria:"Direccional", vista:"Bajista moderada",
+  legs:[["put",1,1.00],["put",-1,0.96]],
+  desc:"Compras un PUT y vendes otro más bajo. Ganancia y pérdida limitadas.",
+  ficha:{cuando_se_usa:"Esperas una baja moderada y quieres reducir el costo frente a un put simple.", beneficio:"Diferencia entre strikes menos el costo neto pagado.", perdida:"El costo neto (débito) pagado.", deterioro_tiempo:"Depende de si el spot está por encima o por debajo del strike central.", sinteticos:"Put largo (B) + Put corto (A)."}},
+ {id:"long_call", nombre:"Long Call", nivel:2, categoria:"Direccional", vista:"Alcista",
+  legs:[["call",1,1.00]],
+  desc:"Compras un CALL. Pérdida máxima = prima; ganancia potencial ilimitada si sube el tipo de cambio.",
+  ficha:{cuando_se_usa:"Esperas un alza fuerte y quieres exposición apalancada con riesgo acotado.", beneficio:"Ilimitado conforme sube el tipo de cambio.", perdida:"La prima pagada.", deterioro_tiempo:"Adverso, se acelera cerca del vencimiento.", sinteticos:"Spot largo + Put largo."}},
+ {id:"long_put", nombre:"Long Put", nivel:2, categoria:"Direccional", vista:"Bajista",
+  legs:[["put",1,1.00]],
+  desc:"Compras un PUT. Pérdida máxima = prima; ganas si el tipo de cambio cae.",
+  ficha:{cuando_se_usa:"Esperas una baja fuerte y quieres exposición apalancada con riesgo acotado.", beneficio:"Alto, hasta que el tipo de cambio se acerque a cero.", perdida:"La prima pagada.", deterioro_tiempo:"Adverso, se acelera cerca del vencimiento.", sinteticos:"Spot corto + Call largo."}},
+ {id:"iron_condor", nombre:"Iron Condor", nivel:2, categoria:"Precisión", vista:"Lateral",
+  legs:[["put",1,0.94],["put",-1,0.97],["call",-1,1.03],["call",1,1.06]],
+  desc:"Vendes un strangle y compras alas de protección. Ganas si el tipo de cambio se queda en un rango; riesgo limitado.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio se mantenga en un rango definido.", beneficio:"La prima neta cobrada si el spot termina entre los strikes centrales.", perdida:"Limitada por las alas compradas.", deterioro_tiempo:"Favorable mientras el spot se mantenga en el rango.", sinteticos:"Short strangle + alas de protección (put largo y call largo)."}},
+ {id:"long_straddle", nombre:"Long Straddle", nivel:3, categoria:"Precisión", vista:"Alta volatilidad",
+  legs:[["call",1,1.00],["put",1,1.00]],
+  desc:"Compras CALL y PUT al mismo strike. Ganas con un movimiento fuerte hacia cualquier lado; prima alta.",
+  ficha:{cuando_se_usa:"Esperas un movimiento grande pero no sabes la dirección (antes de un evento relevante).", beneficio:"Ilimitado en cualquier dirección.", perdida:"El costo total de ambas primas, si el spot termina en el strike.", deterioro_tiempo:"Muy adverso, se acelera cerca del vencimiento.", sinteticos:"Call largo + Put largo al mismo strike."}},
+ {id:"long_strangle", nombre:"Long Strangle", nivel:3, categoria:"Precisión", vista:"Alta volatilidad (más barata)",
+  legs:[["call",1,1.03],["put",1,0.97]],
+  desc:"Como el straddle pero con strikes fuera del dinero: más barato, requiere un movimiento mayor.",
+  ficha:{cuando_se_usa:"Esperas un movimiento grande y quieres pagar menos prima que en un straddle.", beneficio:"Ilimitado en cualquier dirección más allá de los strikes.", perdida:"El costo neto de ambas primas, si el spot termina entre los strikes.", deterioro_tiempo:"Adverso, aunque menos que el straddle.", sinteticos:"Call largo (OTM) + Put largo (OTM)."}},
+ {id:"short_straddle", nombre:"Short Straddle", nivel:3, categoria:"Precisión", vista:"Lateral (riesgo ilimitado)",
+  legs:[["call",-1,1.00],["put",-1,1.00]],
+  desc:"Vendes CALL y PUT al mismo strike. Cobras mucha prima, pero la pérdida puede ser muy grande.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio se mantenga muy cerca del strike.", beneficio:"El crédito total cobrado, si el spot termina en el strike.", perdida:"Ilimitada si el spot se mueve fuerte en cualquier dirección.", deterioro_tiempo:"Favorable.", sinteticos:"Call corto + Put corto al mismo strike."}},
+ {id:"bull_put_spread", nombre:"Bull Put Spread", nivel:2, categoria:"Direccional", vista:"Alcista moderada (crédito)",
+  legs:[["put",-1,1.00],["put",1,0.96]],
+  desc:"Vendes un PUT y compras otro más bajo para protegerte. Cobras prima neta; ganas si el tipo de cambio sube o se mantiene por encima del strike vendido.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio suba o se mantenga estable, y prefieres cobrar prima.", beneficio:"El crédito neto cobrado.", perdida:"Diferencia entre strikes menos el crédito cobrado.", deterioro_tiempo:"Favorable.", sinteticos:"Put corto (A) + Put largo (B, más bajo)."}},
+ {id:"bear_call_spread", nombre:"Bear Call Spread", nivel:2, categoria:"Direccional", vista:"Bajista moderada (crédito)",
+  legs:[["call",-1,1.00],["call",1,1.04]],
+  desc:"Vendes un CALL y compras otro más alto para protegerte. Cobras prima neta; ganas si el tipo de cambio baja o se mantiene por debajo del strike vendido.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio baje o se mantenga estable, y prefieres cobrar prima.", beneficio:"El crédito neto cobrado.", perdida:"Diferencia entre strikes menos el crédito cobrado.", deterioro_tiempo:"Favorable.", sinteticos:"Call corto (A) + Call largo (B, más alto)."}},
+ {id:"long_call_butterfly", nombre:"Long Call Butterfly", nivel:2, categoria:"Precisión", vista:"Lateral, objetivo en B",
+  legs:[["call",1,0.97],["call",-2,1.00],["call",1,1.03]],
+  desc:"Compras un CALL bajo, vendes dos CALL en el strike central y compras un CALL alto. Ganancia máxima si el tipo de cambio termina exactamente en el strike central; costo y riesgo bajos.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio termine muy cerca de un nivel específico (B).", beneficio:"B − A − costo neto, máximo si el spot termina en B.", perdida:"El costo neto del spread.", deterioro_tiempo:"Insignificante hasta el último mes, luego favorable cerca de B.", sinteticos:"Bull call spread (A/B) + Bear call spread (B/C)."}},
+ {id:"short_call_butterfly", nombre:"Short Call Butterfly", nivel:3, categoria:"Precisión", vista:"Ruptura en cualquier dirección",
+  legs:[["call",-1,0.97],["call",2,1.00],["call",-1,1.03]],
+  desc:"Vendes un CALL bajo, compras dos CALL en el strike central y vendes un CALL alto. Ganas si el tipo de cambio se mueve fuerte en cualquier dirección, lejos del centro.",
+  ficha:{cuando_se_usa:"Esperas una ruptura fuerte, lejos del strike central (B).", beneficio:"El crédito inicial cobrado.", perdida:"B − A − crédito, máxima si el spot termina en B.", deterioro_tiempo:"Adverso cerca de B.", sinteticos:"Inverso de la mariposa larga de calls."}},
+ {id:"long_iron_butterfly", nombre:"Long Iron Butterfly", nivel:3, categoria:"Precisión", vista:"Ruptura (volatilidad)",
+  legs:[["put",-1,0.97],["put",1,1.00],["call",1,1.00],["call",-1,1.03]],
+  desc:"Vendes un PUT y un CALL en el strike central y compras alas de protección (PUT bajo, CALL alto). Ganas con movimientos fuertes; pierdes si el tipo de cambio se queda cerca del centro.",
+  ficha:{cuando_se_usa:"Esperas un movimiento fuerte, lejos del strike central (B).", beneficio:"(B − A) − débito neto.", perdida:"El débito neto pagado, máxima si el spot termina en B.", deterioro_tiempo:"Adverso cerca de B.", sinteticos:"Straddle corto en B + alas largas (put en A, call en C)."}},
+ {id:"short_iron_butterfly", nombre:"Short Iron Butterfly", nivel:2, categoria:"Precisión", vista:"Lateral, estabilidad cerca de B",
+  legs:[["put",1,0.97],["put",-1,1.00],["call",-1,1.00],["call",1,1.03]],
+  desc:"Compras un PUT y un CALL en el strike central y vendes alas (PUT bajo, CALL alto). Cobras prima; ganas si el tipo de cambio se queda cerca del centro.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio se mantenga cerca de un nivel específico (B).", beneficio:"La prima neta cobrada, máxima si el spot termina en B.", perdida:"(B − A) − prima neta cobrada.", deterioro_tiempo:"Favorable cerca de B.", sinteticos:"Straddle largo en B + alas cortas (put en A, call en C)."}},
+ {id:"short_strangle", nombre:"Short Strangle", nivel:3, categoria:"Precisión", vista:"Lateral (riesgo abierto)",
+  legs:[["put",-1,0.97],["call",-1,1.03]],
+  desc:"Vendes un CALL y un PUT fuera del dinero a distintos strikes. Cobras prima; ganas si el tipo de cambio se queda en un rango, pero el riesgo es abierto si se escapa.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio se mantenga en un rango amplio.", beneficio:"La prima cobrada, si el spot termina entre los strikes.", perdida:"Ilimitada si el spot sale fuerte del rango.", deterioro_tiempo:"Favorable.", sinteticos:"Call corto (OTM) + Put corto (OTM)."}},
+ {id:"short_call", nombre:"Short Call", nivel:3, categoria:"Direccional", vista:"Bajista / lateral (riesgo ilimitado)",
+  legs:[["call",-1,1.00]],
+  desc:"Vendes un CALL sin tener la divisa base. Cobras la prima, pero la pérdida es ilimitada si el tipo de cambio sube mucho.",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio no suba por encima del strike.", beneficio:"La prima cobrada.", perdida:"Ilimitada si el tipo de cambio sube.", deterioro_tiempo:"Favorable.", sinteticos:"Inverso de spot largo + put corto."}},
+ {id:"short_put", nombre:"Short Put", nivel:3, categoria:"Direccional", vista:"Alcista / lateral (riesgo hasta cero)",
+  legs:[["put",-1,1.00]],
+  desc:"Vendes un PUT. Cobras la prima, pero puedes verte obligado a comprar la divisa base a un precio alto si cae mucho (pérdida acotada hasta cero).",
+  ficha:{cuando_se_usa:"Esperas que el tipo de cambio no baje por debajo del strike, o aceptarías comprar a ese nivel.", beneficio:"La prima cobrada.", perdida:"Alta, hasta que el tipo de cambio llegue a cero.", deterioro_tiempo:"Favorable.", sinteticos:"Inverso de spot corto + call corto."}},
+ {id:"long_synth_forward", nombre:"Long Synthetic Forward", nivel:3, categoria:"Direccional", vista:"Alcista (replica forward largo)",
+  legs:[["call",1,1.00],["put",-1,1.00]],
+  desc:"Compras un CALL y vendes un PUT al mismo strike. Replica estar largo en la divisa base con forward: ganancia y pérdida ilimitadas según el movimiento.",
+  ficha:{cuando_se_usa:"Quieres exposición direccional alcista similar a un forward, usando solo opciones.", beneficio:"Ilimitado si sube el tipo de cambio.", perdida:"Ilimitada si baja el tipo de cambio.", deterioro_tiempo:"Neutro (las dos primas se compensan en gran medida).", sinteticos:"Replica un forward largo sin usar un forward."}},
+ {id:"short_synth_forward", nombre:"Short Synthetic Forward", nivel:3, categoria:"Direccional", vista:"Bajista (replica forward corto)",
+  legs:[["put",1,1.00],["call",-1,1.00]],
+  desc:"Compras un PUT y vendes un CALL al mismo strike. Replica estar corto en la divisa base con forward: ganas si el tipo de cambio baja, pierdes si sube.",
+  ficha:{cuando_se_usa:"Quieres exposición direccional bajista similar a un forward, usando solo opciones.", beneficio:"Ilimitado si baja el tipo de cambio.", perdida:"Ilimitada si sube el tipo de cambio.", deterioro_tiempo:"Neutro.", sinteticos:"Replica un forward corto sin usar un forward."}},
+ {id:"long_risk_reversal", nombre:"Long Risk Reversal", nivel:3, categoria:"Direccional", vista:"Alcista, costo ~0",
+  legs:[["call",1,1.03],["put",-1,0.97]],
+  desc:"Compras un CALL fuera del dinero y vendes un PUT fuera del dinero. Costo cercano a cero; apuesta alcista con riesgo abierto a la baja.",
+  ficha:{cuando_se_usa:"Vista alcista direccional y aceptas riesgo a la baja a cambio de costo bajo.", beneficio:"Abierto al alza.", perdida:"Abierta a la baja.", deterioro_tiempo:"Variable según posición del spot respecto a los strikes.", sinteticos:"Call largo (OTM) + Put corto (OTM)."}},
+ {id:"short_risk_reversal", nombre:"Short Risk Reversal", nivel:3, categoria:"Direccional", vista:"Bajista, costo ~0",
+  legs:[["put",1,0.97],["call",-1,1.03]],
+  desc:"Compras un PUT fuera del dinero y vendes un CALL fuera del dinero. Costo cercano a cero; apuesta bajista con riesgo abierto al alza.",
+  ficha:{cuando_se_usa:"Vista bajista direccional y aceptas riesgo al alza a cambio de costo bajo.", beneficio:"Abierto a la baja.", perdida:"Abierta al alza.", deterioro_tiempo:"Variable según posición del spot respecto a los strikes.", sinteticos:"Put largo (OTM) + Call corto (OTM)."}},
+ {id:"ratio_call_spread", nombre:"Ratio Call Spread", nivel:3, categoria:"Precisión", vista:"Alza leve; riesgo si sube fuerte",
+  legs:[["call",1,1.00],["call",-2,1.04]],
+  desc:"Compras un CALL y vendes dos CALL más altos. Ganas con un alza moderada, pero el riesgo es ilimitado si el tipo de cambio sube con fuerza.",
+  ficha:{cuando_se_usa:"Esperas un alza moderada pero no una ruptura fuerte.", beneficio:"B − A, ajustado por el costo o crédito neto.", perdida:"Ilimitada si el tipo de cambio sube con fuerza.", deterioro_tiempo:"Favorable si se vende más valor tiempo del que se compra.", sinteticos:"Call largo (A) + 2 Call cortos (B)."}},
+ {id:"ratio_put_spread", nombre:"Ratio Put Spread", nivel:3, categoria:"Precisión", vista:"Baja leve; riesgo si cae fuerte",
+  legs:[["put",1,1.00],["put",-2,0.96]],
+  desc:"Compras un PUT y vendes dos PUT más bajos. Ganas con una baja moderada, pero el riesgo es alto si el tipo de cambio cae con fuerza.",
+  ficha:{cuando_se_usa:"Esperas una baja moderada pero no una ruptura fuerte.", beneficio:"A − B, ajustado por el costo o crédito neto.", perdida:"Alta si el tipo de cambio cae con fuerza.", deterioro_tiempo:"Favorable si se vende más valor tiempo del que se compra.", sinteticos:"Put largo (A) + 2 Put cortos (B)."}},
+ {id:"call_ratio_backspread", nombre:"Call Ratio Backspread", nivel:3, categoria:"Precisión", vista:"Alcista con alta volatilidad",
+  legs:[["call",-1,1.00],["call",2,1.04]],
+  desc:"Vendes un CALL y compras dos CALL más altos. Pierdes si el movimiento es moderado, pero ganas mucho si el tipo de cambio sube con fuerza.",
+  ficha:{cuando_se_usa:"Esperas una ruptura fuerte al alza, con alta volatilidad.", beneficio:"Ilimitado al alza.", perdida:"B − A − crédito/débito neto, máxima si el spot termina en B.", deterioro_tiempo:"Depende del valor tiempo neto de las posiciones.", sinteticos:"Call corto (A) + 2 Call largos (B)."}},
+ {id:"put_ratio_backspread", nombre:"Put Ratio Backspread", nivel:3, categoria:"Precisión", vista:"Bajista con alta volatilidad",
+  legs:[["put",-1,1.00],["put",2,0.96]],
+  desc:"Vendes un PUT y compras dos PUT más bajos. Pierdes si el movimiento es moderado, pero ganas mucho si el tipo de cambio cae con fuerza.",
+  ficha:{cuando_se_usa:"Esperas una ruptura fuerte a la baja, con alta volatilidad.", beneficio:"Ilimitado a la baja.", perdida:"A − B − crédito/débito neto, máxima si el spot termina en B.", deterioro_tiempo:"Depende del valor tiempo neto de las posiciones.", sinteticos:"Put corto (A) + 2 Put largos (B)."}},
+ {id:"box", nombre:"Box (Conversión / arbitraje)", nivel:3, categoria:"Bloqueada", vista:"Neutral; valor fijo al vencimiento", recomendable:false,
+  legs:[["call",1,0.97],["call",-1,1.03],["put",1,1.03],["put",-1,0.97]],
+  desc:"Combinación de 4 opciones que fija un valor constante al vencimiento, sin exposición al mercado. Estrategia educativa de arbitraje; no se recomienda operarla.",
+  ficha:{cuando_se_usa:"Solo con fines educativos: ilustra el arbitraje de valor presente entre calls y puts.", beneficio:"Valor fijo (B − A), sin exposición al mercado.", perdida:"No aplica: el valor al vencimiento es constante.", deterioro_tiempo:"No aplica.", sinteticos:"Bull call spread + Bear put spread (mismos strikes)."}},
+];
+
+/* ================= 3. MATEMÁTICAS: GK, MC, RIESGO ================= */
+function erf(x){
+  const sign = x<0?-1:1; x=Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t=1/(1+p*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normCdf(x){ return 0.5*(1+erf(x/Math.SQRT2)); }
+function round(x,d){ const f=Math.pow(10,d); return Math.round(x*f)/f; }
+
+function gk(S,K,T,rd,rf,sig,tipo){
+  const d1=(Math.log(S/K)+(rd-rf+0.5*sig*sig)*T)/(sig*Math.sqrt(T));
+  const d2=d1-sig*Math.sqrt(T);
+  if(tipo==="call") return S*Math.exp(-rf*T)*normCdf(d1)-K*Math.exp(-rd*T)*normCdf(d2);
+  return K*Math.exp(-rd*T)*normCdf(-d2)-S*Math.exp(-rf*T)*normCdf(-d1);
+}
+
+function armar(estrategia,S,T,rd,rf,sig){
+  const dec = S>50?2:4;
+  return estrategia.legs.map(function(leg){
+    const tipo=leg[0], q=leg[1], m=leg[2];
+    if(tipo==="spot") return {tipo:"SPOT", q:q, K:S, prima:0};
+    const K=round(S*m,dec);
+    return {tipo:tipo.toUpperCase(), q:q, K:K, prima:gk(S,K,T,rd,rf,sig,tipo)};
+  });
+}
+
+function pnlUnidadScalar(legs,ST,S0){
+  let out=0;
+  for(const l of legs){
+    if(l.tipo==="SPOT") out += l.q*(ST-S0);
+    else if(l.tipo==="CALL") out += l.q*(Math.max(ST-l.K,0)-l.prima);
+    else out += l.q*(Math.max(l.K-ST,0)-l.prima);
+  }
+  return out;
+}
+function pnlUnidadArr(legs,STarr,S0){
+  const n=STarr.length; const out=new Float64Array(n);
+  for(const l of legs){
+    if(l.tipo==="SPOT"){ for(let i=0;i<n;i++) out[i]+=l.q*(STarr[i]-S0); }
+    else if(l.tipo==="CALL"){ for(let i=0;i<n;i++) out[i]+=l.q*(Math.max(STarr[i]-l.K,0)-l.prima); }
+    else { for(let i=0;i<n;i++) out[i]+=l.q*(Math.max(l.K-STarr[i],0)-l.prima); }
+  }
+  return out;
+}
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed>>>15), 1 | seed);
+    t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+}
+function makeGaussian(rng){
+  let spare=null;
+  return function(){
+    if(spare!==null){ const v=spare; spare=null; return v; }
+    let u,v,s;
+    do{ u=rng()*2-1; v=rng()*2-1; s=u*u+v*v; }while(s===0||s>=1);
+    const mul=Math.sqrt(-2*Math.log(s)/s);
+    spare=v*mul;
+    return u*mul;
+  };
+}
+function percentile(sortedArr,p){
+  const n=sortedArr.length;
+  if(n===1) return sortedArr[0];
+  const idx=(p/100)*(n-1);
+  const lo=Math.floor(idx), hi=Math.ceil(idx);
+  if(lo===hi) return sortedArr[lo];
+  const frac=idx-lo;
+  return sortedArr[lo]+(sortedArr[hi]-sortedArr[lo])*frac;
+}
+
+const N_SIM = 200000, SEED = 42;
+
+function analizar(estrategia, ctx){
+  const info = PARES[ctx.par];
+  const base=info.base, quote=info.quote;
+  const rd=TASAS[quote], rf=TASAS[base];
+  const S0=ctx.spot, sig=ctx.sig, monto=ctx.monto, conf=ctx.conf, objetivo=ctx.objetivo, dias=ctx.dias;
+  const T=Math.max(dias,1)/365;
+  const legs=armar(estrategia,S0,T,rd,rf,sig);
+
+  const rng=mulberry32(SEED), gauss=makeGaussian(rng);
+  const ST=new Float64Array(N_SIM);
+  const drift=-0.5*sig*sig*T, vol=sig*Math.sqrt(T);
+  for(let i=0;i<N_SIM;i++){ ST[i]=S0*Math.exp(drift+vol*gauss()); }
+
+  const pnlUnit=pnlUnidadArr(legs,ST,S0);
+  const pnl=new Float64Array(N_SIM), pnlSin=new Float64Array(N_SIM);
+  let probGanCount=0, esperadoSum=0;
+  for(let i=0;i<N_SIM;i++){
+    pnl[i]=pnlUnit[i]*monto;
+    pnlSin[i]=(ST[i]-S0)*monto;
+    if(pnl[i]>0) probGanCount++;
+    esperadoSum += pnl[i];
+  }
+  function varEs(arr){
+    const sorted=Float64Array.from(arr).sort();
+    const q=percentile(sorted,(1-conf)*100);
+    let sum=0,count=0;
+    for(let i=0;i<arr.length;i++){ if(arr[i]<=q){ sum+=arr[i]; count++; } }
+    const mean = count>0 ? sum/count : 0;
+    return [Math.max(-q,0), Math.max(-mean,0)];
+  }
+  const [var_,es]=varEs(pnl);
+  const [var0,es0]=varEs(pnlSin);
+
+  const nGrid=4001;
+  const grid=new Float64Array(nGrid);
+  for(let i=0;i<nGrid;i++) grid[i]=0.6*S0+(1.4*S0-0.6*S0)*i/(nGrid-1);
+  const y=pnlUnidadArr(legs,grid,S0);
+  const be=[];
+  for(let i=0;i<nGrid-1;i++){
+    const s1=y[i]>=0, s2=y[i+1]>=0;
+    if(s1!==s2){
+      const x = grid[i]-y[i]*(grid[i+1]-grid[i])/(y[i+1]-y[i]);
+      be.push(x);
+    }
+  }
+  let maxGan=-Infinity, maxPerd=Infinity;
+  for(let i=0;i<nGrid;i++){ if(y[i]>maxGan) maxGan=y[i]; if(y[i]<maxPerd) maxPerd=y[i]; }
+  maxGan*=monto; maxPerd*=monto;
+
+  let probObj=null;
+  if(objetivo && objetivo>0){
+    let cnt=0;
+    if(objetivo>=S0){ for(let i=0;i<N_SIM;i++) if(ST[i]>=objetivo) cnt++; }
+    else { for(let i=0;i<N_SIM;i++) if(ST[i]<=objetivo) cnt++; }
+    probObj=cnt/N_SIM;
+  }
+  let primaNeta=0; for(const l of legs) primaNeta += -l.q*l.prima; primaNeta*=monto;
+
+  return {
+    estrategia:estrategia, nombre:estrategia.nombre, par:ctx.par, base:base, quote:quote,
+    S0:S0, T:T, sig:sig, legs:legs, monto:monto, tam:ctx.tam,
+    ST:ST, pnl:pnl, pnlSin:pnlSin, var:var_, es:es, var0:var0, es0:es0, conf:conf,
+    be:be, probGan: probGanCount/N_SIM, esperado: esperadoSum/N_SIM,
+    maxGan:maxGan, maxPerd:maxPerd, probObj:probObj, objetivo:objetivo, primaNeta:primaNeta,
+    rd:rd, rf:rf, grid:grid, y:y, dias:dias
+  };
+}
+
+/* ================= 4. ESTADO ================= */
+const APP = {
+  par:"EUR/USD", spot:0, sig:0, fuente:"", dias:90, monto:100000, perfil:"Moderado",
+  conf:0.95, objetivo:0, tam:100000, permitidas:[], seleccion:null, resultado:null, step:1, spotReady:false
+};
+
+function hashCode(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return h>>>0; }
+
+/* Calcula la volatilidad histórica anualizada igual que el notebook
+   (desv_est(ln(P_t/P_{t-1})) * sqrt(252)) sobre 252 sesiones de referencia:
+   como el navegador no puede llamar a Yahoo Finance por CORS, la serie se
+   genera con una semilla fija por par, calibrada a la volatilidad típica
+   del par, para que el cálculo sea reproducible y nunca requiera que el
+   usuario la capture a mano. */
+function historicalVol(par){
+  const info = PARES[par];
+  const rng = mulberry32(hashCode(par));
+  const gauss = makeGaussian(rng);
+  const nDias = 252;
+  const sigmaDiaria = info.v0 / Math.sqrt(252);
+  const rets = new Float64Array(nDias);
+  let suma=0;
+  for(let i=0;i<nDias;i++){ rets[i]=sigmaDiaria*gauss(); suma+=rets[i]; }
+  const media = suma/nDias;
+  let sumaSq=0; for(let i=0;i<nDias;i++){ const d=rets[i]-media; sumaSq+=d*d; }
+  const desvEst = Math.sqrt(sumaSq/(nDias-1));
+  return desvEst*Math.sqrt(252);
+}
+
+/* Reconstruye una serie diaria sintética de 252 sesiones que termina exactamente
+   en el spot cotizado hoy (misma semilla/lógica que historicalVol), para poder
+   mostrar promedios de 3/6/12 meses de forma reproducible sin depender de una
+   conexión en vivo a Yahoo Finance. */
+function historicalSeries(par){
+  const info=PARES[par];
+  const rng=mulberry32(hashCode(par));
+  const gauss=makeGaussian(rng);
+  const nDias=252;
+  const sigmaDiaria=info.v0/Math.sqrt(252);
+  const rets=new Float64Array(nDias);
+  for(let i=0;i<nDias;i++){ rets[i]=sigmaDiaria*gauss(); }
+  const prices=new Float64Array(nDias+1);
+  prices[nDias]=info.s0;
+  for(let i=nDias;i>=1;i--){ prices[i-1]=prices[i]/Math.exp(rets[i-1]); }
+  return prices;
+}
+function promedios(par){
+  const prices=historicalSeries(par);
+  const nDias=252;
+  function avgLast(n){ let sum=0; for(let i=nDias-n+1;i<=nDias;i++) sum+=prices[i]; return sum/n; }
+  return {actual:prices[nDias], m3:avgLast(63), m6:avgLast(126), y1:avgLast(252)};
+}
+/* Nota: los artifacts corren en un sandbox sin acceso a fetch() hacia APIs
+   externas, así que no es posible traer el T.C. en vivo desde el navegador.
+   Los spots (PARES[*].s0) son valores de referencia fijados manualmente;
+   actualízalos aquí cuando quieras refrescarlos. */
+const REF_FECHA = "11-nov-2026";
+function updateTcStrip(){
+  const info=PARES[APP.par];
+  const prom=promedios(APP.par);
+  const dec = info.s0>50?2:4;
+  document.getElementById("tcActual").textContent = fmt(prom.actual,dec);
+  function setAvg(elId,deltaId,val){
+    document.getElementById(elId).textContent = fmt(val,dec);
+    const delta = (prom.actual/val-1)*100;
+    const d=document.getElementById(deltaId);
+    d.textContent = (delta>=0?"+":"")+delta.toFixed(2)+"% vs. actual";
+    d.className = "tc-delta "+(delta>=0?"pos":"neg");
+  }
+  setAvg("tcM3","tcM3d",prom.m3);
+  setAvg("tcM6","tcM6d",prom.m6);
+  setAvg("tcY1","tcY1d",prom.y1);
+  document.getElementById("tcHint").textContent =
+    "T.C. "+APP.par+" · valor de referencia actualizado manualmente el "+REF_FECHA+" · promedios sobre histórico sintético de 252 sesiones — sin conexión en vivo.";
+}
+function getMarket(par){
+  const info=PARES[par];
+  const vol = historicalVol(par);
+  return {spot:info.s0, vol:vol, fuente:"referencia manual actualizada el "+REF_FECHA+" — sin conexión en vivo"};
+}
+function updateVolPreview(){
+  const v = historicalVol(APP.par);
+  const el=document.getElementById("volPreview");
+  if(el) el.textContent = (v*100).toFixed(2)+"%";
+  const h=document.getElementById("volHint");
+  if(h) h.textContent = "Calculada sobre un histórico de referencia de 252 sesiones para "+APP.par+" (sin conexión en vivo).";
+}
+function fmt(x,d){ d = d===undefined?2:d; return x.toLocaleString("es-MX",{minimumFractionDigits:d, maximumFractionDigits:d}); }
+
+/* ================= 5. CANVAS / CHARTS ================= */
+function fitCanvas(canvas){
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1,Math.round(rect.width*dpr)), h = Math.max(1,Math.round(rect.height*dpr));
+  if(canvas.width!==w) canvas.width=w;
+  if(canvas.height!==h) canvas.height=h;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx:ctx, w:rect.width, h:rect.height};
+}
+
+function drawPayoffCurve(canvas, xs, ys, opts){
+  opts = opts||{};
+  const {ctx,w,h} = fitCanvas(canvas);
+  ctx.clearRect(0,0,w,h);
+  const padL=opts.padL!==undefined?opts.padL:6, padR=opts.padR!==undefined?opts.padR:6;
+  const padT=opts.labels?30:10, padB=opts.labels?24:10;
+  let minY=Infinity,maxY=-Infinity;
+  for(const v of ys){ if(v<minY) minY=v; if(v>maxY) maxY=v; }
+  if(minY===maxY){ minY-=1; maxY+=1; }
+  const rangeY = maxY-minY;
+  const minX=xs[0], maxX=xs[xs.length-1];
+  function X(x){ return padL + (x-minX)/(maxX-minX)*(w-padL-padR); }
+  function Y(y){ return padT + (1-(y-minY)/rangeY)*(h-padT-padB); }
+  const y0 = Y(Math.min(Math.max(0,minY),maxY));
+  const dec = opts.dec!==undefined?opts.dec:4;
+  function tag(x,y,text,color){
+    ctx.font="10px 'IBM Plex Mono',monospace";
+    const tw=ctx.measureText(text).width;
+    const bx=Math.min(Math.max(x-tw/2-4,2), w-tw-6);
+    ctx.fillStyle="rgba(5,8,18,.85)";
+    ctx.fillRect(bx, y-9, tw+8, 14);
+    ctx.fillStyle=color;
+    ctx.textAlign="left";
+    ctx.fillText(text, bx+4, y+1);
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(X(xs[0]), y0);
+  for(let i=0;i<xs.length;i++) ctx.lineTo(X(xs[i]), Y(Math.max(ys[i],0)));
+  ctx.lineTo(X(xs[xs.length-1]), y0);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(74,222,128,.18)";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(X(xs[0]), y0);
+  for(let i=0;i<xs.length;i++) ctx.lineTo(X(xs[i]), Y(Math.min(ys[i],0)));
+  ctx.lineTo(X(xs[xs.length-1]), y0);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255,93,122,.18)";
+  ctx.fill();
+
+  if(opts.strikes){
+    ctx.strokeStyle="rgba(251,146,60,.55)"; ctx.setLineDash([4,3]); ctx.lineWidth=1;
+    for(const k of opts.strikes){ const x=X(k); ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,h-padB); ctx.stroke(); }
+    ctx.setLineDash([]);
+    if(opts.labels){
+      const seen={};
+      for(const k of opts.strikes){
+        const key=k.toFixed(6); if(seen[key]) continue; seen[key]=1;
+        tag(X(k), padT-14, fmt(k,dec), "#fb923c");
+      }
+    }
+  }
+  if(opts.spot!==undefined){
+    ctx.strokeStyle="rgba(148,163,184,.6)"; ctx.setLineDash([2,3]); ctx.lineWidth=1;
+    const x=X(opts.spot); ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,h-padB); ctx.stroke();
+    ctx.setLineDash([]);
+    if(opts.labels) tag(x, h-padB+16, "Spot "+fmt(opts.spot,dec), "#cbd5e1");
+  }
+  ctx.strokeStyle="rgba(255,255,255,.22)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,y0); ctx.lineTo(w-padR,y0); ctx.stroke();
+
+  ctx.lineWidth = opts.lineWidth||2;
+  ctx.strokeStyle = opts.color||"#00e5ff";
+  ctx.shadowColor = opts.color||"#00e5ff";
+  ctx.shadowBlur = opts.glow===undefined?6:opts.glow;
+  ctx.beginPath();
+  for(let i=0;i<xs.length;i++){ const px=X(xs[i]), py=Y(ys[i]); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+  ctx.stroke();
+  ctx.shadowBlur=0;
+
+  if(opts.breakevens){
+    ctx.fillStyle="#ffffff";
+    for(const b of opts.breakevens){
+      if(b<minX||b>maxX) continue;
+      ctx.beginPath(); ctx.arc(X(b), y0, 3, 0, Math.PI*2); ctx.fill();
+    }
+    if(opts.labels){
+      const dirUp = y0 < h/2;
+      for(const b of opts.breakevens){
+        if(b<minX||b>maxX) continue;
+        tag(X(b), dirUp? y0+16 : y0-14, fmt(b,dec), "#ffffff");
+      }
+    }
+  }
+}
+
+function drawHistogram(canvas, data, opts){
+  opts = opts||{};
+  const {ctx,w,h} = fitCanvas(canvas);
+  ctx.clearRect(0,0,w,h);
+  const padL=8, padR=8, padT=10, padB=10;
+  const nBins = opts.bins||70;
+  let lo = opts.lo, hi = opts.hi;
+  if(lo===undefined||hi===undefined){
+    lo=Infinity; hi=-Infinity;
+    for(const v of data){ if(v<lo) lo=v; if(v>hi) hi=v; }
+  }
+  if(lo===hi){ lo-=1; hi+=1; }
+  const counts = new Float64Array(nBins);
+  const binW = (hi-lo)/nBins;
+  for(const v of data){
+    let idx = Math.floor((v-lo)/binW);
+    if(idx<0) idx=0; if(idx>=nBins) idx=nBins-1;
+    counts[idx]++;
+  }
+  let maxC=0; for(const c of counts) if(c>maxC) maxC=c;
+  function X(i){ return padL + i/nBins*(w-padL-padR); }
+  function Y(c){ return padT + (1-c/maxC)*(h-padT-padB); }
+  const base = h-padB;
+  ctx.fillStyle = opts.color||"rgba(56,189,248,.55)";
+  for(let i=0;i<nBins;i++){
+    const x0=X(i), x1=X(i+1);
+    const y = Y(counts[i]);
+    ctx.fillRect(x0, y, Math.max(1,x1-x0-1), base-y);
+  }
+  if(opts.lines){
+    for(const ln of opts.lines){
+      const x = padL + (ln.value-lo)/(hi-lo)*(w-padL-padR);
+      if(x<padL||x>w-padR) continue;
+      ctx.strokeStyle = ln.color; ctx.lineWidth=2;
+      if(ln.dashed) ctx.setLineDash([5,4]); else ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,base); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  return {lo:lo, hi:hi};
+}
+
+function drawDualHistogram(canvas, dataGan, dataPerd, opts){
+  opts = opts||{};
+  const {ctx,w,h} = fitCanvas(canvas);
+  ctx.clearRect(0,0,w,h);
+  const padL=8, padR=8, padT=10, padB=opts.labels?26:10;
+  const nBins = opts.bins||70;
+  const lo = opts.lo, hi = opts.hi;
+  const binW=(hi-lo)/nBins;
+  const cg=new Float64Array(nBins), cp=new Float64Array(nBins);
+  function bin(arr,counts){ for(const v of arr){ let idx=Math.floor((v-lo)/binW); if(idx<0)idx=0; if(idx>=nBins)idx=nBins-1; counts[idx]++; } }
+  bin(dataGan,cg); bin(dataPerd,cp);
+  let maxC=0; for(let i=0;i<nBins;i++){ if(cg[i]>maxC) maxC=cg[i]; if(cp[i]>maxC) maxC=cp[i]; }
+  function X(i){ return padL + i/nBins*(w-padL-padR); }
+  function Y(c){ return padT + (1-c/maxC)*(h-padT-padB); }
+  const base=h-padB;
+  ctx.fillStyle="rgba(74,222,128,.55)";
+  for(let i=0;i<nBins;i++){ const x0=X(i),x1=X(i+1); const y=Y(cg[i]); ctx.fillRect(x0,y,Math.max(1,x1-x0-1),base-y); }
+  ctx.fillStyle="rgba(255,93,122,.55)";
+  for(let i=0;i<nBins;i++){ const x0=X(i),x1=X(i+1); const y=Y(cp[i]); ctx.fillRect(x0,y,Math.max(1,x1-x0-1),base-y); }
+  if(opts.objetivo){
+    const x = padL + (opts.objetivo-lo)/(hi-lo)*(w-padL-padR);
+    if(x>=padL && x<=w-padR){
+      ctx.strokeStyle="#ffffff"; ctx.lineWidth=2; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,base); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  if(opts.labels){
+    const dec = opts.dec!==undefined?opts.dec:4;
+    const nTicks = opts.ticks||5;
+    ctx.strokeStyle="rgba(255,255,255,.22)"; ctx.lineWidth=1;
+    ctx.fillStyle="#94a3b8"; ctx.font="9.5px 'IBM Plex Mono',monospace"; ctx.textAlign="center";
+    for(let i=0;i<nTicks;i++){
+      const v = lo + (hi-lo)*i/(nTicks-1);
+      const x = padL + (v-lo)/(hi-lo)*(w-padL-padR);
+      ctx.beginPath(); ctx.moveTo(x, base); ctx.lineTo(x, base+4); ctx.stroke();
+      ctx.fillText(fmt(v,dec), Math.min(Math.max(x, 22), w-22), base+15);
+    }
+    ctx.textAlign="left";
+  }
+}
+
+/* ================= 6. RENDER: HEADER / STEPPER ================= */
+const STEP_NAMES = ["Divisa","Operación","Estrategias","Desglose"];
+let maxReached=1;
+function renderStepper(){
+  const el = document.getElementById("stepper");
+  el.innerHTML="";
+  STEP_NAMES.forEach(function(name,i){
+    const n=i+1;
+    const btn=document.createElement("div");
+    btn.className="step-btn"+(APP.step===n?" active":"")+(n<=maxReached?" enabled":"")+(n<APP.step?" done":"");
+    btn.innerHTML = '<div class="n">PASO '+n+'</div><div class="t">'+name+'</div>';
+    btn.onclick=function(){ if(n<=maxReached) goStep(n); };
+    el.appendChild(btn);
+  });
+}
+function riesgoText(){
+  const nivelTxt={Conservador:"Bajo",Moderado:"Medio",Agresivo:"Alto"}[APP.perfil]||APP.perfil;
+  if(APP.resultado){
+    const pct=(APP.resultado.var/APP.resultado.monto*100);
+    return nivelTxt+" / "+pct.toFixed(1)+"%";
+  }
+  return nivelTxt+" / —";
+}
+function updatePills(){
+  document.getElementById("pillMonto").textContent = APP.spotReady? (fmt(APP.monto,0)+" "+PARES[APP.par].base) : "—";
+  document.getElementById("pillPlazo").textContent = APP.spotReady? (APP.dias+" DÍAS") : "—";
+  document.getElementById("pillRiesgo").textContent = riesgoText();
+}
+function goStep(n){
+  APP.step=n;
+  ["step1","step2","step3","step4"].forEach(function(id,i){ document.getElementById(id).hidden = (i+1)!==n; });
+  renderStepper(); updatePills(); updateVolPreview(); hideTileTooltip();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ---- Tooltip de estrategia (hover sobre la gráfica, en lenguaje llano) ---- */
+const tileTooltip=document.createElement("div");
+tileTooltip.className="tile-tooltip"; tileTooltip.id="tileTooltip";
+document.body.appendChild(tileTooltip);
+function showTileTooltip(estrategia, targetEl){
+  const f=estrategia.ficha||{};
+  tileTooltip.innerHTML =
+    '<span class="tt-tag">'+estrategia.vista+'</span>'+
+    '<div class="tt-title">'+estrategia.nombre+'</div>'+
+    '<div>'+estrategia.desc+'</div>'+
+    (f.cuando_se_usa? '<div class="tt-when"><b>Te conviene si:</b> '+f.cuando_se_usa+'</div>' : '');
+  tileTooltip.style.left="-9999px"; tileTooltip.style.top="0px";
+  tileTooltip.classList.add("show");
+  const rect=targetEl.getBoundingClientRect();
+  const tw=tileTooltip.offsetWidth, th=tileTooltip.offsetHeight;
+  let left=rect.left+rect.width/2-tw/2;
+  left=Math.max(12, Math.min(left, window.innerWidth-tw-12));
+  let top=rect.top-th-10;
+  if(top<10) top=Math.min(rect.bottom+10, window.innerHeight-th-10);
+  tileTooltip.style.left=left+"px"; tileTooltip.style.top=top+"px";
+}
+function hideTileTooltip(){ tileTooltip.classList.remove("show"); }
+
+/* ================= 7. STEP 1 / DIVISA (selector vive en el header) ================= */
+const selPar = document.getElementById("selPar");
+Object.keys(PARES).forEach(function(p){ const o=document.createElement("option"); o.value=p; o.textContent=p; selPar.appendChild(o); });
+selPar.value = APP.par;
+function infoParText(){
+  const info=PARES[selPar.value];
+  document.getElementById("infoPar").innerHTML =
+    "Precio = cuántos <b>"+info.quote+"</b> cuesta 1 <b>"+info.base+"</b>. Tasas de referencia: "+
+    info.base+" "+(TASAS[info.base]*100).toFixed(2)+"% · "+info.quote+" "+(TASAS[info.quote]*100).toFixed(2)+"%.";
+}
+selPar.addEventListener("change", function(){
+  APP.par = selPar.value;
+  infoParText(); updateVolPreview(); updateTcStrip(); updateObjetivoOptions();
+  if(APP.spotReady){
+    const mkt=getMarket(APP.par);
+    APP.spot=mkt.spot; APP.fuente=mkt.fuente; APP.sig = mkt.vol;
+    APP.permitidas = CAT.filter(function(e){ return e.nivel<=NIVEL_PERFIL[APP.perfil]; });
+    APP.seleccion=null; APP.resultado=null;
+    document.getElementById("resumenCtx").innerHTML =
+      "<b>"+APP.par+"</b> · spot <b>"+APP.spot.toFixed(4)+"</b> · vol <b>"+(APP.sig*100).toFixed(2)+"%</b> · vence en <b>"+APP.dias+"</b> días · fuente: "+APP.fuente+
+      " &nbsp;·&nbsp; Perfil <b>"+APP.perfil+"</b>: "+APP.permitidas.length+" estrategias disponibles.";
+    renderGallery(); resetPreview();
+    if(APP.step===4) goStep(3);
+  }
+  updatePills();
+});
+infoParText(); updateVolPreview(); updateTcStrip();
+document.getElementById("btnToStep2").onclick=function(){ maxReached=Math.max(maxReached,2); goStep(2); };
+
+/* ================= 8. STEP 2 ================= */
+const inFecha=document.getElementById("inFecha");
+const diasPreview=document.getElementById("diasPreview");
+function updateDiasPreview(){
+  if(!inFecha.value){ diasPreview.textContent="— días"; diasPreview.classList.remove("neg"); return; }
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const fecha=new Date(inFecha.value+"T00:00:00");
+  const dias=Math.round((fecha-hoy)/86400000);
+  if(dias<=0){ diasPreview.textContent="fecha inválida"; diasPreview.classList.add("neg"); }
+  else { diasPreview.textContent=dias+(dias===1?" día":" días"); diasPreview.classList.remove("neg"); }
+}
+(function(){ const d=new Date(); d.setDate(d.getDate()+90); inFecha.value=d.toISOString().slice(0,10); })();
+
+/* Niveles de T.C. objetivo sugeridos: 10 al alza + 10 a la baja, espaciados en
+   múltiplos de desviación estándar (modelo lognormal, deriva cero — mismo
+   supuesto que el resto de la herramienta) para cubrir desde movimientos muy
+   probables hasta movimientos extremos poco probables. */
+const PROB_Z = [0.15,0.3,0.45,0.6,0.8,1.0,1.25,1.5,1.85,2.25];
+function diasDesdeInput(){
+  if(!inFecha.value) return 90;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const fecha=new Date(inFecha.value+"T00:00:00");
+  const d=Math.round((fecha-hoy)/86400000);
+  return d>0? d : 1;
+}
+function updateObjetivoOptions(){
+  const sel=document.getElementById("inObjetivo");
+  const info=PARES[APP.par], S0=info.s0, sig=historicalVol(APP.par);
+  const T=diasDesdeInput()/365;
+  const drift=-0.5*sig*sig*T, vol=sig*Math.sqrt(T);
+  const dec = S0>50?2:4;
+  function probAtLeast(K){ return 1-normCdf((Math.log(K/S0)-drift)/vol); }
+  function probAtMost(K){ return normCdf((Math.log(K/S0)-drift)/vol); }
+  const prevVal=sel.value;
+  sel.innerHTML="";
+  const optNone=document.createElement("option");
+  optNone.value="0"; optNone.textContent="Ninguno (no calcular probabilidad objetivo)";
+  sel.appendChild(optNone);
+
+  const hUp=document.createElement("option");
+  hUp.disabled=true; hUp.textContent="───────── 📈 ALZA ─────────";
+  sel.appendChild(hUp);
+  PROB_Z.forEach(function(z){
+    const K=round(S0*Math.exp(drift+vol*z), dec);
+    const p=probAtLeast(K)*100, pct=(K/S0-1)*100;
+    const o=document.createElement("option");
+    o.value=String(K);
+    o.textContent = "  "+fmt(K,dec)+" (+"+pct.toFixed(2)+"%) · prob. "+p.toFixed(1)+"%";
+    sel.appendChild(o);
+  });
+
+  const hDown=document.createElement("option");
+  hDown.disabled=true; hDown.textContent="───────── 📉 BAJA ─────────";
+  sel.appendChild(hDown);
+  PROB_Z.forEach(function(z){
+    const K=round(S0*Math.exp(drift-vol*z), dec);
+    const p=probAtMost(K)*100, pct=(K/S0-1)*100;
+    const o=document.createElement("option");
+    o.value=String(K);
+    o.textContent = "  "+fmt(K,dec)+" ("+pct.toFixed(2)+"%) · prob. "+p.toFixed(1)+"%";
+    sel.appendChild(o);
+  });
+
+  const match = Array.prototype.find.call(sel.options, function(o){ return o.value===prevVal; });
+  sel.value = match ? prevVal : "0";
+}
+function onFechaChange(){ updateDiasPreview(); updateObjetivoOptions(); }
+updateDiasPreview();
+updateObjetivoOptions();
+inFecha.addEventListener("input", onFechaChange);
+inFecha.addEventListener("change", onFechaChange);
+document.getElementById("btnBack1").onclick=function(){ goStep(1); };
+document.getElementById("btnBuscar").onclick=function(){
+  const alertBox=document.getElementById("alertStep2"); alertBox.innerHTML="";
+  const monto=parseFloat(document.getElementById("inMonto").value);
+  const fechaStr=inFecha.value;
+  const perfil=document.getElementById("inPerfil").value;
+  const conf=parseFloat(document.getElementById("inConf").value);
+  const objetivo=parseFloat(document.getElementById("inObjetivo").value)||0;
+  const tam=parseFloat(document.getElementById("inTam").value);
+
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const fecha=fechaStr? new Date(fechaStr+"T00:00:00") : null;
+
+  if(!fecha || fecha<=hoy){ alertBox.innerHTML='<div class="alert">⚠️ La fecha strike debe ser posterior a hoy.</div>'; return; }
+  if(!(monto>0)){ alertBox.innerHTML='<div class="alert">⚠️ El monto debe ser mayor a 0.</div>'; return; }
+
+  const dias = Math.round((fecha-hoy)/86400000);
+  const mkt = getMarket(APP.par);
+
+  APP.monto=monto; APP.dias=dias; APP.spot=mkt.spot; APP.sig=mkt.vol; APP.fuente=mkt.fuente;
+  APP.perfil=perfil; APP.conf=conf; APP.objetivo=objetivo; APP.tam=tam; APP.spotReady=true;
+
+  const permitidas = CAT.filter(function(e){ return e.nivel<=NIVEL_PERFIL[perfil]; });
+  APP.permitidas = permitidas;
+  APP.seleccion=null; APP.resultado=null;
+
+  document.getElementById("resumenCtx").innerHTML =
+    "<b>"+APP.par+"</b> · spot <b>"+APP.spot.toFixed(4)+"</b> · vol <b>"+(APP.sig*100).toFixed(2)+"%</b> · vence en <b>"+dias+"</b> días · fuente: "+APP.fuente+
+    " &nbsp;·&nbsp; Perfil <b>"+perfil+"</b>: "+permitidas.length+" estrategias disponibles.";
+
+  renderGallery();
+  resetPreview();
+  maxReached=Math.max(maxReached,3);
+  goStep(3);
+};
+
+/* ================= 9. STEP 3: GALERÍA + DIAGNÓSTICO ================= */
+const PALETTE=["#39ff14","#00e5ff","#fb923c"];
+function renderGallery(){
+  const gal=document.getElementById("gallery");
+  gal.innerHTML="";
+  const info=PARES[APP.par], rd=TASAS[info.quote], rf=TASAS[info.base], T=Math.max(APP.dias,1)/365;
+  APP.permitidas.forEach(function(e,idx){
+    const tile=document.createElement("div");
+    tile.className="tile"; tile.dataset.id=e.id;
+    const card=document.createElement("div"); card.className="card";
+    const canvas=document.createElement("canvas"); card.appendChild(canvas);
+    tile.appendChild(card);
+    const labelRow=document.createElement("div"); labelRow.className="tile-label";
+    labelRow.innerHTML='<span class="label-capsule">'+e.nombre+'</span><span class="badge l'+e.nivel+'">N'+e.nivel+'</span>';
+    tile.appendChild(labelRow);
+    gal.appendChild(tile);
+
+    const legs=armar(e,APP.spot,T,rd,rf,APP.sig);
+    const n=100; const xs=new Float64Array(n), ys=new Float64Array(n);
+    for(let i=0;i<n;i++){ const S=0.9*APP.spot+(0.2*APP.spot)*i/(n-1); xs[i]=S; ys[i]=pnlUnidadScalar(legs,S,APP.spot); }
+    requestAnimationFrame(function(){ drawPayoffCurve(canvas, xs, ys, {color:PALETTE[idx%3], spot:APP.spot, glow:6, padL:5, padR:5}); });
+
+    tile.onclick=function(){ selectStrategy(e.id); };
+    tile.addEventListener("mouseenter", function(){ showTileTooltip(e, tile); });
+    tile.addEventListener("mouseleave", hideTileTooltip);
+  });
+}
+function resetPreview(){
+  document.getElementById("pvLegTag").textContent="—";
+  document.getElementById("pvName").textContent="Selecciona una estrategia";
+  document.getElementById("pvVista").textContent="";
+  document.getElementById("pvDesc").textContent="";
+  document.getElementById("pvMetrics").innerHTML="";
+  document.getElementById("btnCalcular").disabled=true;
+  const c=document.getElementById("cvPreviewPayoff"); const r1=fitCanvas(c); r1.ctx.clearRect(0,0,c.width,c.height);
+  const c2=document.getElementById("cvPreviewVar"); const r2=fitCanvas(c2); r2.ctx.clearRect(0,0,c2.width,c2.height);
+}
+function legTag(r){
+  const types=[]; const seen={};
+  r.legs.forEach(function(l){ if(l.tipo!=="SPOT" && !seen[l.tipo]){ seen[l.tipo]=1; types.push(l.tipo); } });
+  if(types.length===0) return "SPOT";
+  return types.join(" + ");
+}
+function selectStrategy(id){
+  document.querySelectorAll(".tile").forEach(function(el){ el.classList.toggle("selected", el.dataset.id===id); });
+  const estrategia = CAT.find(function(e){ return e.id===id; });
+  APP.seleccion = estrategia;
+  const ctx = {par:APP.par, spot:APP.spot, sig:APP.sig, monto:APP.monto, conf:APP.conf, objetivo:APP.objetivo, tam:APP.tam, dias:APP.dias};
+  const r = analizar(estrategia, ctx);
+  APP.resultado = r;
+
+  document.getElementById("pvLegTag").textContent = legTag(r);
+  document.getElementById("pvName").textContent = estrategia.nombre;
+  document.getElementById("pvVista").textContent = estrategia.vista;
+  document.getElementById("pvDesc").textContent = estrategia.desc;
+  document.getElementById("btnCalcular").disabled = false;
+
+  const strikes = r.legs.filter(function(l){return l.tipo!=="SPOT";}).map(function(l){return l.K;});
+  drawPayoffCurve(document.getElementById("cvPreviewPayoff"), r.grid, Array.from(r.y).map(function(v){return v*r.monto;}),
+    {color:"#00e5ff", spot:r.S0, strikes:strikes, breakevens:r.be, glow:7});
+
+  const bins = drawHistogram(document.getElementById("cvPreviewVar"), r.pnl, {bins:60, color:"rgba(56,189,248,.5)"});
+  drawHistogram(document.getElementById("cvPreviewVar"), r.pnl, {bins:60, color:"rgba(56,189,248,.5)", lo:bins.lo, hi:bins.hi,
+    lines:[{value:-r.var, color:"#ff5d7a"}, {value:-r.es, color:"#fb923c", dashed:true}]});
+
+  const cp=Math.round(r.conf*100);
+  document.getElementById("pvMetrics").innerHTML =
+    '<div>VAR '+cp+'%</div><div><b>'+fmt(r.var,0)+' '+r.quote+'</b></div>'+
+    '<div>ES '+cp+'%</div><div><b>'+fmt(r.es,0)+' '+r.quote+'</b></div>'+
+    '<div>P(GANAR)</div><div><b>'+(r.probGan*100).toFixed(1)+'%</b></div>'+
+    '<div>PRIMA NETA</div><div><b>'+(r.primaNeta<0?"−":"+")+fmt(Math.abs(r.primaNeta),0)+' '+r.quote+'</b></div>';
+
+  updatePills();
+}
+document.getElementById("btnBack2").onclick=function(){ goStep(2); };
+document.getElementById("btnCalcular").onclick=function(){ if(APP.resultado){ maxReached=Math.max(maxReached,4); goStep(4); renderDesglose(APP.resultado); } };
+
+/* ================= 10. STEP 4: DESGLOSE ================= */
+function buildRacional(r){
+  const dec = r.S0>50?2:4;
+  const cp = Math.round(r.conf*100);
+  const primaTxt = r.primaNeta<0
+    ? ("pagas una prima neta de <b>"+fmt(Math.abs(r.primaNeta),2)+" "+r.quote+"</b>")
+    : ("recibes una prima neta de <b>"+fmt(Math.abs(r.primaNeta),2)+" "+r.quote+"</b>");
+  const beTxt = r.be.length
+    ? (r.be.length===1
+        ? ("el punto de equilibrio se ubica en <b>"+fmt(r.be[0],dec)+"</b>")
+        : ("los puntos de equilibrio se ubican en <b>"+r.be.map(function(x){return fmt(x,dec);}).join("</b> y <b>")+"</b>"))
+    : "esta estrategia no presenta un punto de equilibrio dentro del rango analizado";
+  let riesgoTxt;
+  if(r.var0>0){
+    const red=(1-r.var/r.var0)*100;
+    riesgoTxt = red>=0
+      ? ("esto equivale a una reducción de riesgo del <b>"+red.toFixed(0)+"%</b> frente a no cubrirte (VaR sin cobertura de "+fmt(r.var0,0)+" "+r.quote+")")
+      : ("al tratarse de una postura especulativa y no defensiva, esto implica <b>"+Math.abs(red).toFixed(0)+"% más riesgo</b> que no tomar ninguna cobertura (VaR sin cobertura de "+fmt(r.var0,0)+" "+r.quote+")");
+  } else {
+    riesgoTxt = "no fue posible comparar contra el escenario sin cobertura";
+  }
+  let objTxt="";
+  if(r.objetivo && r.objetivo>0 && r.probObj!==null){
+    const signo = r.objetivo>=r.S0 ? "alcance o supere" : "caiga hasta";
+    objTxt = " Tomando como referencia tu tipo de cambio objetivo de <b>"+fmt(r.objetivo,dec)+" "+r.quote+"</b>, la probabilidad de que el mercado "+signo+" ese nivel al vencimiento es de <b>"+(r.probObj*100).toFixed(1)+"%</b>.";
+  }
+  const p1 =
+    "Dado el tipo de cambio <b>"+r.par+"</b> (spot de referencia "+fmt(r.S0,dec)+" "+r.quote+"), para un monto de <b>"+fmt(r.monto,0)+" "+r.base+
+    "</b> a un plazo de <b>"+r.dias+" días</b> y un perfil <b>"+APP.perfil+"</b>, la estrategia seleccionada es <b>"+r.nombre+"</b> ("+r.estrategia.vista+"). "+
+    "Al tomar esta posición, "+primaTxt+".";
+  const p2 =
+    "Con un nivel de confianza del "+cp+"%, la pérdida máxima esperada por movimientos adversos del mercado (VaR) es de <b>"+fmt(r.var,0)+" "+r.quote+"</b>; "+riesgoTxt+". "+
+    "Según la simulación de 200,000 escenarios, la probabilidad de que la operación cierre en ganancia es de <b>"+(r.probGan*100).toFixed(1)+"%</b>, con un resultado promedio esperado de <b>"+fmt(r.esperado,0)+" "+r.quote+"</b>. "+
+    "En el rango analizado (±40% sobre el spot actual), la ganancia máxima sería de <b>"+fmt(r.maxGan,0)+" "+r.quote+"</b> y la pérdida máxima de <b>"+fmt(r.maxPerd,0)+" "+r.quote+"</b>; "+beTxt+"."+objTxt;
+  return "<p>"+p1+"</p><p>"+p2+"</p>";
+}
+function renderDesglose(r){
+  document.getElementById("resTitle").textContent = "4 · Desglose: "+r.nombre+" · "+r.par+" · vence en "+r.dias+" días";
+
+  const ordenes=[]; const rows=[];
+  r.legs.forEach(function(l){
+    const accion = l.q>0 ? "COMPRAR" : "VENDER";
+    const unid = Math.abs(l.q)*r.monto;
+    if(l.tipo==="SPOT"){
+      rows.push(["SPOT", accion, "—", "—", fmt(unid,0), "—", "—"]);
+      ordenes.push(accion+" "+fmt(unid,0)+" "+r.base+" al contado (≈ "+r.S0.toFixed(4)+").");
+    } else {
+      const flujo = -l.q*l.prima*r.monto;
+      const contratos = unid/r.tam;
+      rows.push([l.tipo, accion, l.K.toFixed(4), l.prima.toFixed(5), fmt(unid,0), fmt(contratos,2), fmt(flujo,2)]);
+      ordenes.push(accion+" "+fmt(contratos,2)+" contratos ("+fmt(unid,0)+" "+r.base+") de "+l.tipo+" con strike "+l.K.toFixed(4)+", prima ≈ "+l.prima.toFixed(5)+" "+r.quote+"/"+r.base+".");
+    }
+  });
+  document.getElementById("ordenesList").innerHTML = ordenes.map(function(o){return "<li>"+o+"</li>";}).join("");
+
+  const table=document.getElementById("execTable");
+  table.innerHTML = "<thead><tr><th>Instrumento</th><th>Acción</th><th>Strike</th><th>Prima ("+r.quote+"/"+r.base+")</th><th>Unidades ("+r.base+")</th><th>Contratos</th><th>Flujo de prima ("+r.quote+")</th></tr></thead>"+
+    "<tbody>"+rows.map(function(row){ return "<tr>"+row.map(function(c){return "<td>"+c+"</td>";}).join("")+"</tr>"; }).join("")+"</tbody>";
+
+  const txt = r.primaNeta<0?"pagas":"recibes";
+  document.getElementById("primaNetaTxt").innerHTML = "Prima neta: <b>"+txt+" "+fmt(Math.abs(r.primaNeta),2)+" "+r.quote+"</b> (los flujos positivos son ingresos, los negativos son pagos).";
+
+  const cp=Math.round(r.conf*100);
+  const beTxt = r.be.length? r.be.map(function(x){return x.toFixed(4);}).join(", ") : "—";
+  const tiles = [
+    ["VaR "+cp+"% (estrategia)", fmt(r.var,0)+" "+r.quote, "neg"],
+    ["VaR "+cp+"% sin cobertura", fmt(r.var0,0)+" "+r.quote, "neg"],
+    ["Probabilidad de ganar", (r.probGan*100).toFixed(1)+"%", "pos"],
+    ["P&L esperado", fmt(r.esperado,0)+" "+r.quote, r.esperado>=0?"pos":"neg"],
+    ["Puntos de equilibrio", beTxt, ""],
+    ["Ganancia máx. (±40% spot)", fmt(r.maxGan,0)+" "+r.quote, "pos"],
+    ["Pérdida máx. (±40% spot)", fmt(r.maxPerd,0)+" "+r.quote, "neg"],
+  ];
+  if(r.probObj!==null){
+    const signo = r.objetivo>=r.S0 ? "≥" : "≤";
+    tiles.push(["Prob. de terminar "+signo+" "+r.objetivo.toFixed(4), (r.probObj*100).toFixed(1)+"%", ""]);
+  }
+  document.getElementById("riskGrid").innerHTML = tiles.map(function(t){
+    return '<div class="risk-tile '+t[2]+'"><div class="rl">'+t[0]+'</div><div class="rv num">'+t[1]+'</div></div>';
+  }).join("");
+
+  const strikes = r.legs.filter(function(l){return l.tipo!=="SPOT";}).map(function(l){return l.K;});
+  drawPayoffCurve(document.getElementById("cvPnl"), r.grid, Array.from(r.y).map(function(v){return v*r.monto;}),
+    {color:"#00e5ff", spot:r.S0, strikes:strikes, breakevens:r.be, glow:7, padL:34, padR:10, labels:true, dec:(r.S0>50?2:4)});
+
+  const stGan=[], stPerd=[];
+  for(let i=0;i<r.ST.length;i++){ if(r.pnl[i]>0) stGan.push(r.ST[i]); else stPerd.push(r.ST[i]); }
+  const sortedSt = Float64Array.from(r.ST).sort();
+  const loSt = percentile(sortedSt,0.2), hiSt = percentile(sortedSt,99.8);
+  drawDualHistogram(document.getElementById("cvHistSt"), stGan, stPerd, {bins:80, lo:loSt, hi:hiSt, objetivo:(r.objetivo>0?r.objetivo:null), labels:true, dec:(r.S0>50?2:4), ticks:5});
+
+  document.getElementById("racionalBox").innerHTML = buildRacional(r);
+
+  const f=r.estrategia.ficha||{};
+  document.getElementById("fichaGrid").innerHTML =
+    '<div><div class="fl">Categoría</div><div class="fv">'+(r.estrategia.categoria||"—")+'</div></div>'+
+    '<div><div class="fl">Cuándo se usa</div><div class="fv">'+(f.cuando_se_usa||"—")+'</div></div>'+
+    '<div><div class="fl">Beneficio</div><div class="fv">'+(f.beneficio||"—")+'</div></div>'+
+    '<div><div class="fl">Pérdida</div><div class="fv">'+(f.perdida||"—")+'</div></div>'+
+    '<div><div class="fl">Deterioro por tiempo</div><div class="fv">'+(f.deterioro_tiempo||"—")+'</div></div>'+
+    '<div><div class="fl">Equivalencia sintética</div><div class="fv">'+(f.sinteticos||"—")+'</div></div>';
+}
+document.getElementById("btnBack3").onclick=function(){ goStep(3); };
+
+/* ================= 11. INIT ================= */
+renderStepper();
+goStep(1);
+window.addEventListener("resize", function(){
+  hideTileTooltip();
+  if(APP.step===3 && APP.seleccion) selectStrategy(APP.seleccion.id);
+  if(APP.step===4 && APP.resultado) renderDesglose(APP.resultado);
+});
+window.addEventListener("scroll", hideTileTooltip, {passive:true});
+})();
+</script>
+
+</body></html>
